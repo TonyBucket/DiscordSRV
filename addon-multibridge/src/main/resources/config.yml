@@ -1,0 +1,22 @@
+bots:
+  - name: "main"
+    useDiscordSRVMain: true
+    guildName: "MainHall"
+    channels:
+      - id: 123456789012345678
+        tag: "global"
+        prefix: "[Main]"
+  - name: "mirror2"
+    token: "BOT_TOKEN_2"
+    guildName: "MirrorServer"
+    channels:
+      - id: 987654321098765432
+        tag: "global"
+        prefix: "[Mirror2]"
+
+settings:
+  broadcastTags: ["global"]
+  lowMemoryMode: false
+  threadPoolSize: 4
+  perBotRateLimit: 50
+  mergeWindowMs: 100
