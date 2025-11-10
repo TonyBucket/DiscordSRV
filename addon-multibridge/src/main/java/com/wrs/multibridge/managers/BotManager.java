@@ -7,7 +7,7 @@ import github.scarsz.discordsrv.DiscordSRV;
 import github.scarsz.discordsrv.util.DiscordUtil;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.ChunkingFilter;
@@ -59,14 +59,19 @@ public class BotManager {
         }
 
         for (Map<?, ?> rawBot : rawBots) {
-            String name = Objects.toString(rawBot.getOrDefault("name", "bot-" + (bots.size() + 1)));
-            String token = rawBot.containsKey("token") ? Objects.toString(rawBot.get("token"), "") : "";
-            String guildName = rawBot.containsKey("guildName") ? Objects.toString(rawBot.get("guildName"), name) : name;
-            List<BridgeChannel> channels = parseChannels(rawBot.get("channels"));
+            if (rawBot == null) {
+                continue;
+            }
 
-            if (Boolean.parseBoolean(String.valueOf(rawBot.getOrDefault("useDiscordSRVMain", false)))) {
-                plugin.getLogger().warning("Bot profile '" + name + "' is configured to use the main DiscordSRV bot, which is manag"
-                        + "ed by DiscordSRV itself. Skipping this profile.");
+            Map<String, Object> botConfig = normalizeMap(rawBot);
+
+            String name = Objects.toString(botConfig.getOrDefault("name", "bot-" + (bots.size() + 1)));
+            String token = Objects.toString(botConfig.getOrDefault("token", ""), "");
+            String guildName = Objects.toString(botConfig.getOrDefault("guildName", name), name);
+            List<BridgeChannel> channels = parseChannels(botConfig.get("channels"));
+
+            if (Boolean.parseBoolean(String.valueOf(botConfig.getOrDefault("useDiscordSRVMain", false)))) {
+                plugin.getLogger().warning("Bot profile '" + name + "' is configured to use the main DiscordSRV bot, which is managed by DiscordSRV itself. Skipping this profile.");
                 continue;
             }
 
@@ -92,7 +97,7 @@ public class BotManager {
             if (!(entry instanceof Map)) {
                 continue;
             }
-            Map<?, ?> map = (Map<?, ?>) entry;
+            Map<String, Object> map = normalizeMap((Map<?, ?>) entry);
             Object idObj = map.get("id");
             if (!(idObj instanceof Number) && !(idObj instanceof String)) {
                 continue;
@@ -109,6 +114,19 @@ public class BotManager {
             channels.add(new BridgeChannel(id, tag, prefix));
         }
         return channels;
+    }
+
+    private Map<String, Object> normalizeMap(Map<?, ?> source) {
+        Map<String, Object> normalized = new java.util.HashMap<>();
+        if (source == null) {
+            return normalized;
+        }
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry.getKey() != null) {
+                normalized.put(String.valueOf(entry.getKey()), entry.getValue());
+            }
+        }
+        return normalized;
     }
 
     private void startAdditionalBot(BridgeBot bot, String token) {
