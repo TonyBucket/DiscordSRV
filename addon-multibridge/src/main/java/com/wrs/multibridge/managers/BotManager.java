@@ -12,16 +12,15 @@ import github.scarsz.discordsrv.util.TimeUtil;
 import github.scarsz.discordsrv.util.WebhookUtil;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.MessageBuilder;
 import net.dv8tion.jda.api.entities.MessageEmbed;
-import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.ChunkingFilter;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
-import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
 import net.kyori.adventure.text.Component;
-import org.apache.commons.lang3.StringUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -145,9 +144,9 @@ public class BotManager {
         executor.execute(() -> {
             try {
                 JDABuilder builder = JDABuilder.createDefault(token);
-                builder.enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MEMBERS);
+                builder.enableIntents(GatewayIntent.GUILD_MESSAGES, GatewayIntent.GUILD_MESSAGE_REACTIONS, GatewayIntent.GUILD_MEMBERS);
                 if (lowMemoryMode) {
-                    builder.disableCache(CacheFlag.ACTIVITY, CacheFlag.CLIENT_STATUS, CacheFlag.SCHEDULED_EVENTS, CacheFlag.EMOJI, CacheFlag.STICKER);
+                    builder.disableCache(CacheFlag.ACTIVITY, CacheFlag.CLIENT_STATUS, CacheFlag.VOICE_STATE, CacheFlag.EMOTE);
                     builder.setMemberCachePolicy(MemberCachePolicy.NONE);
                     builder.setChunkingFilter(ChunkingFilter.NONE);
                 }
@@ -299,7 +298,7 @@ public class BotManager {
             return true;
         }
         String tag = channel.getTag();
-        return StringUtils.isNotBlank(tag) && tags.contains(tag);
+        return isNotBlank(tag) && tags.contains(tag);
     }
 
     private void sendChatToDiscord(BridgeBot bot, BridgeChannel channel, Player player, String processedMessage, String sourceChannel) {
@@ -308,7 +307,7 @@ public class BotManager {
             return;
         }
         String prefix = channel.getPrefix().isEmpty() ? "" : channel.getPrefix() + " ";
-        String channelPrefix = StringUtils.isNotBlank(sourceChannel) ? "[" + sourceChannel + "] " : "";
+        String channelPrefix = isNotBlank(sourceChannel) ? "[" + sourceChannel + "] " : "";
         String payload = prefix + channelPrefix + processedMessage;
         if (DiscordSRV.config().getBoolean("Experiment_WebhookChatMessageDelivery")) {
             WebhookUtil.deliverMessage(textChannel, player, payload);
@@ -325,19 +324,19 @@ public class BotManager {
             return;
         }
         String prefix = channel.getPrefix().isEmpty() ? "" : channel.getPrefix() + " ";
-        String channelPrefix = StringUtils.isNotBlank(sourceChannel) ? "[" + sourceChannel + "] " : "";
-        String payload = prefix + channelPrefix + StringUtils.defaultString(content, "");
+        String channelPrefix = isNotBlank(sourceChannel) ? "[" + sourceChannel + "] " : "";
+        String payload = prefix + channelPrefix + defaultString(content);
         MessageEmbed embed = embeds.stream().findFirst().orElse(null);
         if (usingWebhooks) {
             WebhookUtil.deliverMessage(textChannel, webhookName, webhookAvatarUrl, payload, embed);
             return;
         }
-        MessageCreateBuilder builder = new MessageCreateBuilder();
-        if (StringUtils.isNotBlank(payload)) {
+        MessageBuilder builder = new MessageBuilder();
+        if (isNotBlank(payload)) {
             builder.setContent(payload);
         }
         if (embed != null) {
-            builder.addEmbeds(embed);
+            builder.setEmbed(embed);
         }
         textChannel.sendMessage(builder.build()).queue(null, throwable ->
                 plugin.getLogger().log(Level.WARNING, "Failed to send formatted message to channel " + channel.getId() + " for bot '" + bot.getName() + "'", throwable));
@@ -348,8 +347,8 @@ public class BotManager {
         if (textChannel == null) {
             return;
         }
-        String sanitizedMessage = StringUtils.defaultString(message, "");
-        String displayName = StringUtils.isNotBlank(player.getDisplayName()) ? MessageUtil.strip(player.getDisplayName()) : "";
+        String sanitizedMessage = defaultString(message);
+        String displayName = isNotBlank(player.getDisplayName()) ? MessageUtil.strip(player.getDisplayName()) : "";
         String avatarUrl = DiscordSRV.getAvatarUrl(player);
         String botAvatarUrl = textChannel.getJDA().getSelfUser().getEffectiveAvatarUrl();
         String botName = textChannel.getGuild().getSelfMember().getEffectiveName();
@@ -379,18 +378,18 @@ public class BotManager {
         }
         String webhookName = translator.apply(format.getWebhookName(), false);
         String webhookAvatar = translator.apply(format.getWebhookAvatarUrl(), false);
-        String payload = prefix + StringUtils.defaultString(discordMessage.getContentRaw(), "");
+        String payload = prefix + defaultString(discordMessage.getContentRaw());
         MessageEmbed embed = discordMessage.getEmbeds().stream().findFirst().orElse(null);
 
         if (format.isUseWebhooks()) {
             WebhookUtil.deliverMessage(textChannel, webhookName, webhookAvatar, payload, embed);
         } else {
-            MessageCreateBuilder builder = new MessageCreateBuilder();
-            if (StringUtils.isNotBlank(payload)) {
+            MessageBuilder builder = new MessageBuilder();
+            if (isNotBlank(payload)) {
                 builder.setContent(payload);
             }
             if (embed != null) {
-                builder.addEmbeds(embed);
+                builder.setEmbed(embed);
             }
             textChannel.sendMessage(builder.build()).queue(null, throwable ->
                     plugin.getLogger().log(Level.WARNING, "Failed to send message format to channel " + channel.getId() + " for bot '" + bot.getName() + "'", throwable));
@@ -407,6 +406,18 @@ public class BotManager {
             plugin.getLogger().warning("Bot '" + bot.getName() + "' cannot find channel id " + channel.getId());
         }
         return textChannel;
+    }
+
+    private static boolean isNotBlank(String value) {
+        return !isBlank(value);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private static String defaultString(String value) {
+        return value == null ? "" : value;
     }
 
     public static class BridgeBot {

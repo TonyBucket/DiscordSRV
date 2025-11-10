@@ -18,7 +18,7 @@ repositories {
 dependencies {
     compileOnly("org.spigotmc:spigot-api:1.21.1-R0.1-SNAPSHOT")
     compileOnly(project(":"))
-    implementation("net.dv8tion:JDA:5.0.0-beta.20")
+    implementation("net.dv8tion:JDA:4.4.1_DiscordSRV.fix-7")
 }
 
 tasks {
@@ -31,6 +31,10 @@ tasks {
         archiveClassifier.set("")
         archiveVersion.set("")
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+        from("src/main/resources") {
+            include("plugin.yml", "config.yml")
+        }
 
         val relocationPrefix = "com.wrs.multibridge.libs"
         relocate("net.dv8tion.jda", "$relocationPrefix.jda")
