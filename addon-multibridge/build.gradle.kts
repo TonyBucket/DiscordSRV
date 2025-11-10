@@ -2,6 +2,7 @@ import org.gradle.api.file.DuplicatesStrategy
 
 plugins {
     id("java")
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 java {
@@ -20,10 +21,31 @@ dependencies {
     implementation("net.dv8tion:JDA:5.0.0-beta.20")
 }
 
-tasks.jar {
-    archiveBaseName.set("DiscordSRV-MultiBridge")
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    from("src/main/resources") {
-        include("plugin.yml", "config.yml")
+tasks {
+    jar {
+        enabled = false
+    }
+
+    shadowJar {
+        archiveBaseName.set("DiscordSRV-MultiBridge")
+        archiveClassifier.set("")
+        archiveVersion.set("")
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+        val relocationPrefix = "com.wrs.multibridge.libs"
+        relocate("net.dv8tion.jda", "$relocationPrefix.jda")
+        relocate("club.minnced.discord.webhook", "$relocationPrefix.discord.webhook")
+        relocate("com.neovisionaries.ws.client", "$relocationPrefix.neovisionaries.ws")
+        relocate("com.iwebpp.crypto", "$relocationPrefix.iwebpp.crypto")
+        relocate("okhttp3", "$relocationPrefix.okhttp3")
+        relocate("okio", "$relocationPrefix.okio")
+    }
+
+    assemble {
+        dependsOn(shadowJar)
+    }
+
+    build {
+        dependsOn(shadowJar)
     }
 }
