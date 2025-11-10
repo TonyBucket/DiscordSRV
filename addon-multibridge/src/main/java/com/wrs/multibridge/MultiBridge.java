@@ -3,9 +3,7 @@ package com.wrs.multibridge;
 import com.wrs.multibridge.listeners.DiscordSRVHookListener;
 import com.wrs.multibridge.listeners.MinecraftChatListener;
 import com.wrs.multibridge.managers.BotManager;
-import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Collections;
@@ -23,6 +21,7 @@ public class MultiBridge extends JavaPlugin {
     private ExecutorService executor;
     private BotManager botManager;
     private DiscordSRVHookListener hookListener;
+    private MinecraftChatListener minecraftChatListener;
     private Set<String> broadcastTags = Collections.emptySet();
     private boolean lowMemoryMode;
     private int perBotRateLimit;
@@ -36,12 +35,10 @@ public class MultiBridge extends JavaPlugin {
         ensureExecutor(readThreadPoolSize());
 
         botManager = new BotManager(this);
-        hookListener = new DiscordSRVHookListener(this);
+        minecraftChatListener = new MinecraftChatListener(this, botManager);
+        hookListener = new DiscordSRVHookListener(this, minecraftChatListener);
 
         reloadBridge();
-
-        PluginManager pluginManager = Bukkit.getPluginManager();
-        pluginManager.registerEvents(new MinecraftChatListener(this, botManager), this);
 
         hookListener.register();
 

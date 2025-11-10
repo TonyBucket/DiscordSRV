@@ -3,6 +3,7 @@ package com.wrs.multibridge.managers;
 import com.wrs.multibridge.MultiBridge;
 import com.wrs.multibridge.listeners.DiscordChatListener;
 import com.wrs.multibridge.utils.RateLimiter;
+import github.scarsz.discordsrv.DiscordSRV;
 import github.scarsz.discordsrv.util.DiscordUtil;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
@@ -12,9 +13,8 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.ChunkingFilter;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
-import org.bukkit.entity.Player;
 
 import javax.security.auth.login.LoginException;
 import java.util.ArrayList;
@@ -54,33 +54,31 @@ public class BotManager {
         shutdown();
 
         if (rawBots == null || rawBots.isEmpty()) {
-            plugin.getLogger().warning("No bots configured for MultiBridge; defaulting to the main DiscordSRV bot.");
-            rawBots = Collections.singletonList(Collections.singletonMap("useDiscordSRVMain", true));
+            plugin.getLogger().info("No additional MultiBridge bots configured; operating solely with DiscordSRV's primary bot.");
+            return;
         }
 
         for (Map<?, ?> rawBot : rawBots) {
             String name = Objects.toString(rawBot.getOrDefault("name", "bot-" + (bots.size() + 1)));
-            boolean useMain = Boolean.parseBoolean(String.valueOf(rawBot.getOrDefault("useDiscordSRVMain", false)));
             String token = rawBot.containsKey("token") ? Objects.toString(rawBot.get("token"), "") : "";
             String guildName = rawBot.containsKey("guildName") ? Objects.toString(rawBot.get("guildName"), name) : name;
             List<BridgeChannel> channels = parseChannels(rawBot.get("channels"));
 
-            BridgeBot bot = new BridgeBot(name, guildName, useMain, channels, new RateLimiter(perBotRateLimit, mergeWindowMs));
+            if (Boolean.parseBoolean(String.valueOf(rawBot.getOrDefault("useDiscordSRVMain", false)))) {
+                plugin.getLogger().warning("Bot profile '" + name + "' is configured to use the main DiscordSRV bot, which is manag"
+                        + "ed by DiscordSRV itself. Skipping this profile.");
+                continue;
+            }
+
+            if (token.isEmpty()) {
+                plugin.getLogger().warning("Bot profile '" + name + "' is missing a token; skipping.");
+                continue;
+            }
+
+            BridgeBot bot = new BridgeBot(name, guildName, channels, new RateLimiter(perBotRateLimit, mergeWindowMs));
             bots.put(name.toLowerCase(), bot);
 
-            if (useMain) {
-                JDA mainJda = DiscordUtil.getJda();
-                if (mainJda == null) {
-                    plugin.getLogger().warning("DiscordSRV main JDA is not ready yet; bot " + name + " will attach once available.");
-                    continue;
-                }
-                registerJda(bot, mainJda, true);
-                plugin.getLogger().info("Linked profile '" + name + "' to the primary DiscordSRV bot.");
-            } else if (!token.isEmpty()) {
-                startAdditionalBot(bot, token);
-            } else {
-                plugin.getLogger().warning("Bot profile '" + name + "' is missing both token and useDiscordSRVMain=true; skipping.");
-            }
+            startAdditionalBot(bot, token);
         }
     }
 
@@ -126,7 +124,7 @@ public class BotManager {
                 }
                 builder.addEventListeners(discordChatListener);
                 JDA jda = builder.build();
-                registerJda(bot, jda, false);
+                registerJda(bot, jda);
                 plugin.getLogger().info("Started additional Discord bot '" + bot.getName() + "' for guild " + bot.getGuildName() + ".");
             } catch (LoginException loginException) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to login bot '" + bot.getName() + "': " + loginException.getMessage(), loginException);
@@ -136,7 +134,7 @@ public class BotManager {
         });
     }
 
-    private void registerJda(BridgeBot bot, JDA jda, boolean primary) {
+    private void registerJda(BridgeBot bot, JDA jda) {
         if (jda == null) {
             return;
         }
@@ -144,9 +142,6 @@ public class BotManager {
         jda.addEventListener(discordChatListener);
         bot.setJda(jda);
         jdaLookup.put(jda, bot);
-        if (primary) {
-            plugin.getLogger().info("Attached Discord listener to main DiscordSRV JDA for profile '" + bot.getName() + "'.");
-        }
     }
 
     public void shutdown() {
@@ -154,9 +149,7 @@ public class BotManager {
             JDA jda = bot.getJda();
             if (jda != null) {
                 jda.removeEventListener(discordChatListener);
-                if (!bot.isUsingMainJda()) {
-                    jda.shutdownNow();
-                }
+                jda.shutdownNow();
             }
         });
         bots.clear();
@@ -167,8 +160,7 @@ public class BotManager {
         return Collections.unmodifiableCollection(bots.values());
     }
 
-    public void broadcastMinecraftMessage(String author, String message, Set<String> tags) {
-        String sanitized = ChatColor.stripColor(message);
+    public void broadcastProcessedGameMessage(String processedMessage, Set<String> tags, String sourceChannel) {
         for (BridgeBot bot : bots.values()) {
             for (BridgeChannel channel : bot.getChannels()) {
                 if (!tags.isEmpty() && (channel.getTag().isEmpty() || !tags.contains(channel.getTag()))) {
@@ -177,12 +169,12 @@ public class BotManager {
                 if (!bot.tryAcquire()) {
                     continue;
                 }
-                plugin.getExecutor().execute(() -> sendToDiscord(bot, channel, author, sanitized));
+                plugin.getExecutor().execute(() -> sendToDiscord(bot, channel, processedMessage, sourceChannel));
             }
         }
     }
 
-    private void sendToDiscord(BridgeBot bot, BridgeChannel channel, String author, String message) {
+    private void sendToDiscord(BridgeBot bot, BridgeChannel channel, String processedMessage, String sourceChannel) {
         JDA jda = bot.getJda();
         if (jda == null) {
             return;
@@ -192,7 +184,8 @@ public class BotManager {
             return;
         }
         String prefix = channel.getPrefix().isEmpty() ? "" : channel.getPrefix() + " ";
-        String payload = prefix + author + ChatColor.RESET + " > " + message;
+        String channelPrefix = sourceChannel != null && !sourceChannel.isEmpty() ? "[" + sourceChannel + "] " : "";
+        String payload = prefix + channelPrefix + processedMessage;
         textChannel.sendMessage(payload).queue(null, throwable -> plugin.getLogger().log(Level.WARNING, "Failed to send message to channel " + channel.getId() + " for bot '" + bot.getName() + "'", throwable));
     }
 
@@ -210,25 +203,19 @@ public class BotManager {
         String prefix = channel.getPrefix().isEmpty() ? "" : channel.getPrefix() + " ";
         String output = prefix + author + " > " + content;
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                player.sendMessage(output);
-            }
-        });
+        Bukkit.getScheduler().runTask(plugin, () -> DiscordSRV.getPlugin().broadcastMessageToMinecraftServer(null, Component.text(output), event.getAuthor()));
     }
 
     public static class BridgeBot {
         private final String name;
         private final String guildName;
-        private final boolean usingMainJda;
         private final List<BridgeChannel> channels;
         private final RateLimiter rateLimiter;
         private volatile JDA jda;
 
-        public BridgeBot(String name, String guildName, boolean usingMainJda, List<BridgeChannel> channels, RateLimiter rateLimiter) {
+        public BridgeBot(String name, String guildName, List<BridgeChannel> channels, RateLimiter rateLimiter) {
             this.name = name;
             this.guildName = guildName;
-            this.usingMainJda = usingMainJda;
             this.channels = Collections.unmodifiableList(new ArrayList<>(channels));
             this.rateLimiter = rateLimiter;
         }
@@ -239,10 +226,6 @@ public class BotManager {
 
         public String getGuildName() {
             return guildName;
-        }
-
-        public boolean isUsingMainJda() {
-            return usingMainJda;
         }
 
         public List<BridgeChannel> getChannels() {
