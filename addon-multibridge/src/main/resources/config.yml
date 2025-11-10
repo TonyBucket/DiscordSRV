@@ -1,0 +1,22 @@
+bots:
+  - name: "relay-1"
+    token: "BOT_TOKEN_1"
+    guildName: "RelayOne"
+    channels:
+      - id: 123456789012345678
+        tag: "global"
+        prefix: "[Relay]"
+  - name: "relay-2"
+    token: "BOT_TOKEN_2"
+    guildName: "RelayTwo"
+    channels:
+      - id: 987654321098765432
+        tag: "global"
+        prefix: "[Mirror2]"
+
+settings:
+  broadcastTags: ["global"]
+  lowMemoryMode: false
+  threadPoolSize: 4
+  perBotRateLimit: 50
+  mergeWindowMs: 100
