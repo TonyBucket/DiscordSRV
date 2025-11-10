@@ -38,6 +38,7 @@ public class MultiBridge extends JavaPlugin {
         minecraftChatListener = new MinecraftChatListener(this, botManager);
         hookListener = new DiscordSRVHookListener(this, minecraftChatListener);
 
+        minecraftChatListener.register();
         reloadBridge();
 
         hookListener.register();
@@ -49,6 +50,9 @@ public class MultiBridge extends JavaPlugin {
     public void onDisable() {
         if (hookListener != null) {
             hookListener.unregister();
+        }
+        if (minecraftChatListener != null) {
+            minecraftChatListener.unregister();
         }
         if (botManager != null) {
             botManager.shutdown();

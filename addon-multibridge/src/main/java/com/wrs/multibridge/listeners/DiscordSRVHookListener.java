@@ -3,7 +3,9 @@ package com.wrs.multibridge.listeners;
 import com.wrs.multibridge.MultiBridge;
 import github.scarsz.discordsrv.DiscordSRV;
 import github.scarsz.discordsrv.api.Subscribe;
+import github.scarsz.discordsrv.api.events.AchievementMessagePostProcessEvent;
 import github.scarsz.discordsrv.api.events.ConfigReloadedEvent;
+import github.scarsz.discordsrv.api.events.DeathMessagePostProcessEvent;
 import github.scarsz.discordsrv.api.events.GameChatMessagePostProcessEvent;
 import org.bukkit.Bukkit;
 
@@ -45,9 +47,16 @@ public class DiscordSRVHookListener {
 
     @Subscribe
     public void onGameChatProcessed(GameChatMessagePostProcessEvent event) {
-        if (event.isCancelled()) {
-            return;
-        }
-        minecraftChatListener.forwardProcessedMessage(event.getChannel(), event.getProcessedMessage());
+        minecraftChatListener.forwardChatEvent(event);
+    }
+
+    @Subscribe
+    public void onDeathMessageProcessed(DeathMessagePostProcessEvent event) {
+        minecraftChatListener.forwardDeathEvent(event);
+    }
+
+    @Subscribe
+    public void onAdvancementMessageProcessed(AchievementMessagePostProcessEvent event) {
+        minecraftChatListener.forwardAdvancementEvent(event);
     }
 }
