@@ -1,3 +1,5 @@
+import org.gradle.api.file.DuplicatesStrategy
+
 plugins {
     id("java")
 }
@@ -20,6 +22,7 @@ dependencies {
 
 tasks.jar {
     archiveBaseName.set("DiscordSRV-MultiBridge")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from("src/main/resources") {
         include("plugin.yml", "config.yml")
     }
