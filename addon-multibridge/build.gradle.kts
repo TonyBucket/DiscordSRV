@@ -9,6 +9,7 @@ java {
 repositories {
     mavenCentral()
     maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
+    maven("https://nexus.scarsz.me/content/groups/public/")
 }
 
 dependencies {
