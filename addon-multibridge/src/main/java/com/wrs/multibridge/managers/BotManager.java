@@ -144,10 +144,12 @@ public class BotManager {
                 JDA jda = builder.build();
                 registerJda(bot, jda);
                 plugin.getLogger().info("Started additional Discord bot '" + bot.getName() + "' for guild " + bot.getGuildName() + ".");
-            } catch (LoginException loginException) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to login bot '" + bot.getName() + "': " + loginException.getMessage(), loginException);
             } catch (Exception ex) {
-                plugin.getLogger().log(Level.SEVERE, "Unexpected error starting bot '" + bot.getName() + "'", ex);
+                if (ex instanceof LoginException) {
+                    plugin.getLogger().log(Level.SEVERE, "Failed to login bot '" + bot.getName() + "': " + ex.getMessage(), ex);
+                } else {
+                    plugin.getLogger().log(Level.SEVERE, "Unexpected error starting bot '" + bot.getName() + "'", ex);
+                }
             }
         });
     }
