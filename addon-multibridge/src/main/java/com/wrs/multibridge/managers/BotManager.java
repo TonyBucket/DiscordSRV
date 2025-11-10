@@ -21,7 +21,6 @@ import net.dv8tion.jda.api.utils.ChunkingFilter;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
 import net.kyori.adventure.text.Component;
-import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
@@ -190,6 +189,20 @@ public class BotManager {
         return Collections.unmodifiableCollection(bots.values());
     }
 
+    public Optional<BridgeBot> getBotByJda(JDA jda) {
+        if (jda == null) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(jdaLookup.get(jda));
+    }
+
+    public Optional<BridgeChannel> getChannelForBot(BridgeBot bot, long channelId) {
+        if (bot == null) {
+            return Optional.empty();
+        }
+        return bot.getChannel(channelId);
+    }
+
     public void broadcastProcessedGameMessage(Player player, String processedMessage, Set<String> tags, String sourceChannel) {
         for (BridgeBot bot : bots.values()) {
             for (BridgeChannel channel : bot.getChannels()) {
@@ -271,16 +284,21 @@ public class BotManager {
     }
 
     public void handleDiscordMessage(MessageReceivedEvent event) {
-        Optional<BridgeBot> botOptional = Optional.ofNullable(jdaLookup.get(event.getJDA()));
-        if (!botOptional.isPresent()) {
+        if (event == null) {
             return;
         }
-        BridgeBot bot = botOptional.get();
-        Optional<BridgeChannel> channelOptional = bot.getChannel(event.getChannel().getIdLong());
-        if (!channelOptional.isPresent()) {
+        BridgeBot bot = jdaLookup.get(event.getJDA());
+        if (bot == null) {
             return;
         }
-        BridgeChannel channel = channelOptional.get();
+        BridgeChannel channel = bot.getChannel(event.getChannel().getIdLong()).orElse(null);
+        handleDiscordMessage(event, bot, channel);
+    }
+
+    public void handleDiscordMessage(MessageReceivedEvent event, BridgeBot bot, BridgeChannel channel) {
+        if (event == null || bot == null || channel == null) {
+            return;
+        }
         if (!shouldSendToChannel(channel, plugin.getBroadcastTags())) {
             return;
         }
@@ -289,7 +307,7 @@ public class BotManager {
         String prefix = channel.getPrefix().isEmpty() ? "" : channel.getPrefix() + " ";
         String formatted = ChatColor.DARK_AQUA + "[" + bot.getGuildName() + "]" + ChatColor.GRAY + " " + author + ChatColor.RESET + " > " + content;
         String output = prefix + formatted;
-        Bukkit.getScheduler().runTask(plugin, () ->
+        plugin.getExecutor().execute(() ->
                 DiscordSRV.getPlugin().broadcastMessageToMinecraftServer(null, Component.text(output), event.getAuthor()));
     }
 
